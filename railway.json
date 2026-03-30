@@ -1,0 +1,36 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "npm install"
+  },
+  "deploy": {
+    "startCommand": "npm start",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  },
+  "variables": {
+    "NODE_ENV": {
+      "description": "Environment (production or development)",
+      "value": "production",
+      "required": true
+    },
+    "JWT_SECRET": {
+      "description": "Secret key for JWT tokens",
+      "generator": "secret",
+      "required": true
+    },
+    "PORT": {
+      "description": "Port to run the server on",
+      "value": "3000",
+      "required": false
+    },
+    "FRONTEND_URL": {
+      "description": "URL of the frontend (for CORS)",
+      "value": "https://your-dep-chat.up.railway.app",
+      "required": false
+    }
+  }
+}

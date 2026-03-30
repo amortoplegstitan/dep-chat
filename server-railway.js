@@ -5,57 +5,56 @@ const cors = require('cors');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
 
-// Импорт функций базы данных (используем новую версию для Railway)
+// Импорт функций базы данных
 const {
-  initializeDatabase,
   createUser,
   findUserByUsername,
   verifyPassword,
   addMessage,
   getRecentMessages,
-  getAllUsers
-} = require('./src/database-railway');
+  getAllUsers,
+  initializeDatabase
+} = require('./src/database');
 
 const app = express();
 const server = http.createServer(app);
 
-// Конфигурация для продакшена
-const isProduction = process.env.NODE_ENV === 'production';
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'dep-chat-secret-key-change-in-production';
-
-// Настройка Socket.IO
+// Конфигурация Socket.IO для продакшена
 const io = socketIo(server, {
   cors: {
-    origin: isProduction ? process.env.FRONTEND_URL || "*" : "*",
+    origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL || "*" : "*",
     methods: ["GET", "POST"],
     credentials: true
   },
   transports: ['websocket', 'polling']
 });
 
-console.log(`🚀 Запуск Дэп-Чата`);
-console.log(`📡 Порт: ${PORT}`);
-console.log(`🌍 Режим: ${isProduction ? 'Production' : 'Development'}`);
-console.log(`🔐 JWT секрет: ${JWT_SECRET ? 'Установлен' : 'Используется по умолчанию'}`);
+// Конфигурация из переменных окружения
+const JWT_SECRET = process.env.JWT_SECRET || 'dep-chat-secret-key-change-in-production';
+const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+console.log(`Запуск Дэп-Чата в режиме: ${NODE_ENV}`);
+console.log(`Порт: ${PORT}`);
+console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'любой'}`);
 
 // Middleware
 app.use(cors({
-  origin: isProduction ? process.env.FRONTEND_URL || "*" : "*",
+  origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL || "*" : "*",
   credentials: true
 }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Health check endpoint для Railway и мониторинга
+// Health check endpoint для Railway
 app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'ok', 
-    service: 'dep-chat',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
+    service: 'dep-chat',
+    environment: NODE_ENV
   });
 });
 
@@ -100,7 +99,7 @@ app.post('/api/register', async (req, res) => {
     }
     
     const user = await createUser(username, password);
-    console.log(`✅ Зарегистрирован новый пользователь: ${username}`);
+    console.log(`Зарегистрирован новый пользователь: ${username}`);
     
     const token = jwt.sign(
       { id: user.id, username: user.username },
@@ -114,7 +113,7 @@ app.post('/api/register', async (req, res) => {
       user: { id: user.id, username: user.username }
     });
   } catch (error) {
-    console.error('❌ Ошибка регистрации:', error);
+    console.error('Ошибка регистрации:', error);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
@@ -145,7 +144,7 @@ app.post('/api/login', async (req, res) => {
       user: { id: user.id, username: user.username }
     });
   } catch (error) {
-    console.error('❌ Ошибка входа:', error);
+    console.error('Ошибка входа:', error);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
@@ -156,7 +155,7 @@ app.get('/api/users', authenticateToken, async (req, res) => {
     const users = await getAllUsers();
     res.json(users);
   } catch (error) {
-    console.error('❌ Ошибка получения пользователей:', error);
+    console.error('Ошибка получения пользователей:', error);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
@@ -166,7 +165,7 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
     const messages = await getRecentMessages();
     res.json(messages);
   } catch (error) {
-    console.error('❌ Ошибка получения сообщений:', error);
+    console.error('Ошибка получения сообщений:', error);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
@@ -179,7 +178,7 @@ app.get('/api/me', authenticateToken, (req, res) => {
 const onlineUsers = new Map();
 
 io.on('connection', (socket) => {
-  console.log(`🔌 Новое подключение: ${socket.id}`);
+  console.log('Новое подключение:', socket.id);
   
   socket.on('authenticate', async (token) => {
     try {
@@ -192,7 +191,7 @@ io.on('connection', (socket) => {
       socket.emit('authenticated', { username: decoded.username });
       socket.broadcast.emit('userJoined', decoded.username);
       
-      console.log(`👤 ${decoded.username} присоединился к чату`);
+      console.log(`${decoded.username} присоединился к чату`);
       
       // Отправляем список онлайн пользователей
       const onlineList = Array.from(onlineUsers.values());
@@ -216,9 +215,9 @@ io.on('connection', (socket) => {
       };
       
       io.emit('newMessage', messageWithId);
-      console.log(`💬 Новое сообщение от ${socket.username}: ${data.text.substring(0, 50)}${data.text.length > 50 ? '...' : ''}`);
+      console.log(`Новое сообщение от ${socket.username}: ${data.text}`);
     } catch (error) {
-      console.error('❌ Ошибка сохранения сообщения:', error);
+      console.error('Ошибка сохранения сообщения:', error);
     }
   });
   
@@ -226,7 +225,7 @@ io.on('connection', (socket) => {
     if (socket.username) {
       onlineUsers.delete(socket.id);
       socket.broadcast.emit('userLeft', socket.username);
-      console.log(`👋 ${socket.username} отключился`);
+      console.log(`${socket.username} отключился`);
       
       const onlineList = Array.from(onlineUsers.values());
       io.emit('onlineUsers', onlineList);
@@ -243,57 +242,42 @@ app.get('/chat', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'chat.html'));
 });
 
-// Обработка 404
-app.use((req, res) => {
-  res.status(404).json({ error: 'Маршрут не найден' });
-});
-
 // Обработка ошибок
 app.use((err, req, res, next) => {
-  console.error('🔥 Необработанная ошибка:', err);
+  console.error('Необработанная ошибка:', err);
   res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 
-// Инициализация и запуск сервера
+// Инициализация базы данных и запуск сервера
 async function startServer() {
   try {
-    console.log('🔄 Инициализация базы данных...');
+    // Инициализируем базу данных
     await initializeDatabase();
-    console.log('✅ База данных готова');
     
     server.listen(PORT, () => {
-      console.log(`✅ Сервер Дэп-Чат запущен!`);
-      console.log(`📍 Локальный доступ: http://localhost:${PORT}`);
-      console.log(`📊 Health check: http://localhost:${PORT}/health`);
-      console.log(`🔧 Режим: ${isProduction ? 'Production' : 'Development'}`);
+      console.log(`✅ Сервер Дэп-Чат запущен на порту ${PORT}`);
+      console.log(`✅ Режим: ${NODE_ENV}`);
+      console.log(`✅ Health check: http://localhost:${PORT}/health`);
+      console.log(`✅ Frontend: http://localhost:${PORT}`);
       
-      if (isProduction) {
-        console.log('🚀 Готов к работе в продакшене!');
+      if (NODE_ENV === 'production') {
+        console.log(`✅ Production ready`);
       }
     });
     
-    // Graceful shutdown
+    // Обработка graceful shutdown
     process.on('SIGTERM', () => {
-      console.log('🛑 SIGTERM получен, завершаем работу...');
+      console.log('SIGTERM получен, завершаем работу...');
       server.close(() => {
-        console.log('✅ Сервер остановлен');
-        process.exit(0);
-      });
-    });
-    
-    process.on('SIGINT', () => {
-      console.log('🛑 SIGINT получен, завершаем работу...');
-      server.close(() => {
-        console.log('✅ Сервер остановлен');
+        console.log('Сервер остановлен');
         process.exit(0);
       });
     });
     
   } catch (error) {
-    console.error('❌ Критическая ошибка запуска сервера:', error);
+    console.error('Ошибка запуска сервера:', error);
     process.exit(1);
   }
 }
 
-// Запуск сервера
 startServer();
