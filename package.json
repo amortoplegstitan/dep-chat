@@ -2,11 +2,11 @@
   "name": "dep-chat",
   "version": "1.0.0",
   "description": "Дэп-Чат: реальный чат для общения с друзьями",
-  "main": "server.js",
+  "main": "server-fixed.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "railway": "node server-railway.js",
+    "start": "node server-fixed.js",
+    "dev": "nodemon server-fixed.js",
+    "railway": "node server-fixed.js",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "keywords": ["chat", "real-time", "dep-chat", "messaging", "railway"],
